@@ -1,127 +1,96 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
 #include <vector>
 #include <cstdint>
 #include <cassert>
+#include <sstream>
+#include <iomanip>
 
-uint32_t pack_color(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a=255) {
-    return (a<<24) + (b<<16) + (g<<8) + r;
+#include "map.h"
+#include "utils.h"
+#include "player.h"
+#include "framebuffer.h"
+#include "textures.h"
+
+int wall_x_texcoord(const float x, const float y, Texture &tex_walls) {
+    float hitx = x - floor(x + .5); 
+    float hity = y - floor(y + .5); 
+    float edge = std::abs(hity) > std::abs(hitx) ? hity : hitx; // we need to determine whether we hit a vertical or horizontal wall
+    int tex = (edge + .5) * tex_walls.size;
+    if (tex < 0) tex = 0; // prevent rounding errors from triggering the assert
+    if (tex >= (int)tex_walls.size) tex = tex_walls.size - 1;
+    assert(tex >= 0 && tex < (int)tex_walls.size);
+    return tex;
 }
 
-void unpack_color(const uint32_t &color, uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &a) {
-    r = (color >>  0) & 255;
-    g = (color >>  8) & 255;
-    b = (color >> 16) & 255;
-    a = (color >> 24) & 255;
-}
+void render(FrameBuffer &fb, Map &map, Player &player, Texture &tex_walls) {
+	fb.clear(pack_color(255, 255, 255)); // clear screen
 
-void drop_ppm_image(const std::string filename, const std::vector<uint32_t> &image, const size_t w, const size_t h) {
-    assert(image.size() == w*h);
-    std::ofstream ofs(filename, std::ios::binary);
-    ofs << "P6\n" << w << " " << h << "\n255\n";
-    for (size_t i=0; i<h*w; ++i) {
-        uint8_t r, g, b, a;
-        unpack_color(image[i], r, g, b, a);
-        ofs << static_cast<char>(r) << static_cast<char>(g) << static_cast<char>(b);
-    }
-    ofs.close();
-}
-
-void draw_rectangle(std::vector<uint32_t> &img, const size_t img_w, const size_t img_h, const size_t x, const size_t y, 
-	const size_t w, const size_t h, const uint32_t color) {
-	assert(img.size() == img_w*img_h);
-	for (size_t i=0; i<w; i++) {
-		for (size_t j=0; j<h; j++) {
-			size_t cx = x+i;
-			size_t cy = y+j;
-			if (cx>=img_w || cy>=img_h) continue; 
-			img[cx + cy*img_w] = color;
+	const size_t rect_w = fb.w/(map.w*2); // size of one map cell on the screen
+	const size_t rect_h = fb.h/map.h;
+	for (size_t j=0; j<map.h; j++) {
+		for (size_t i=0; i<map.w; i++) {
+			if (map.is_empty(i, j)) continue; // skip empty space
+			size_t rect_x = i*rect_w;
+			size_t rect_y = j*rect_h;
+			size_t texid = map.get(i, j) - '0';
+			assert(texid<tex_walls.count);
+			fb.draw_rectangle(rect_x, rect_y, rect_w, rect_h, tex_walls.get(0, 0, texid)); // the color is taken from the upper left pixel of the texture #texid
 		}
 	}
-} 
 
-int main() {
-    const size_t win_w = 1024; // image width
-    const size_t win_h = 512; // image height
-    std::vector<uint32_t> framebuffer(win_w*win_h, pack_color(255, 255, 255)); // the image itself, initialized to white
+	for (size_t i=0; i<fb.w/2; i++) { // draw visibility cone and the 3D view
+		float angle = player.a-player.fov/2 + player.fov*i/float(fb.w/2);
+		for (float t=0; t<20; t+=.01) { // ray marching loop
+			float x = player.x + t*cos(angle);
+			float y = player.y + t*sin(angle);
+			fb.set_pixel(x*rect_w, y*rect_h, pack_color(160, 160, 160)); // draws visibiliy cone
 
-	const size_t map_w = 16; // map width
-	const size_t map_h = 16; // map height
-	const char map[] = "0000222222220000"\
-    				   "1              0"\
-					   "1      11111   0"\
-   					   "1     0        0"\
-    				   "0     0  1110000"\
-					   "0     3        0"\
-    				   "0   10000      0"\
-    				   "0   0   11100  0"\
-   					   "0   0   0      0"\
-    				   "0   0   1  00000"\
-					   "0       1      0"\
-    				   "2       1      0"\
-    				   "0       0      0"\
-   					   "0 0000000      0"\
-    				   "0              0"\
-    				   "0002222222200000"; // the game map
-	assert(sizeof(map) == map_w*map_h+1); // +1 for nullterminating string
-	float player_x = 3.456; // player x position
-    float player_y = 2.345; // player y position
-    float player_a = 1.523; // player view direction
-	const float fov = M_PI/3.; // filed of view
+			if (map.is_empty(x,y)) continue;
 
-	const size_t ncolors = 10;
-	std::vector<uint32_t> colors(ncolors);
-	for (size_t i=0; i<ncolors; i++) {
-		colors[i] = pack_color(rand()%255, rand()%255, rand()%255);
-	}
-
-	const size_t rect_w = win_w/(map_w*2);
-    const size_t rect_h = win_h/map_h;
-	for (size_t frame = 0; frame<360; frame++) {
-		std::stringstream ss;
-		ss << std::setfill('0') << std::setw(5) << frame << ".ppm";
-		player_a += 2*M_PI/360;
-
-		framebuffer = std::vector<uint32_t>(win_w*win_h, pack_color(255, 255, 255)); // clear the screen
-
-		for (size_t j=0; j<map_h; j++) { // draw the map
-			for (size_t i=0; i<map_w; i++) {
-				if (map[i+j*map_w]==' ') continue; // skip empty spaces
-				size_t rect_x = i*rect_w;
-				size_t rect_y = j*rect_h;
-				size_t icolor = map[i+j*map_w] - '0';
-				assert(icolor<ncolors);
-				draw_rectangle(framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
-			}
-		}
-
-		for (size_t i=0; i<win_w/2; i++) { // draw the visibility cone and "3D" view
-			float angle = player_a-fov/2 + fov*i/float(win_w/2);
-			for (float t=0; t<20; t+=.01) {
-				float cx = player_x + t*cos(angle);
-				float cy = player_y + t*sin(angle);
-
-				size_t pix_x = cx*rect_w;
-				size_t pix_y = cy*rect_h;
-				framebuffer[pix_x + pix_y*win_w] = pack_color(160, 160, 160); // draws the vixibility of the cone
-
-				if (map[int(cx)+int(cy)*map_w]!=' ') { // our ray touches a wall, so draw the vertical column to create an illusion of 3D
-					size_t icolor = map[int(cx)+int(cy)*map_w] - '0';
-					assert(icolor<ncolors);
-					size_t column_height = win_h/(t*cos(angle-player_a));
-					draw_rectangle(framebuffer, win_w, win_h, win_w/2+i, win_h/2-column_height/2, 1, column_height, colors[icolor]);
-					break;
+			size_t texid = map.get(x,y) - '0'; // our ray touches a wall, so draw the vertical column (3D)
+			assert(texid<tex_walls.count);
+			size_t column_height = fb.h/(t*cos(angle-player.a));
+			int x_texcoord = wall_x_texcoord(x, y, tex_walls);
+			std::vector<uint32_t> column = tex_walls.get_scaled_column(texid, x_texcoord, column_height);
+			int pix_x = i + fb.w/2; // right half of screen hence the +fb.w/2
+			for (size_t j=0; j<column_height; j++) {
+				int pix_y = j+fb.h/2-column_height/2;
+				if (pix_y>=0 && pix_y<(int)fb.h) {
+					fb.set_pixel(pix_x, pix_y, column[j]);
 				}
 			}
-		}	
-		drop_ppm_image(ss.str(), framebuffer, win_w, win_h);
+			break;
+		} // ray marching loop
+	} // field of viecw ray sweeping
+}
+
+int main() {
+	FrameBuffer fb; 
+	fb.w = 1024;
+	fb.h = 512; 
+	fb.img = std::vector<uint32_t>(1024*512, pack_color(255, 255, 255));
+    Player player;
+	player.x = 3.456;
+	player.y = 2.345; 
+	player.a = 1.523;
+	player.fov = M_PI/3.;
+    Map map;
+    Texture tex_walls("texturesfolder/walltext.png");
+    if (!tex_walls.count) {
+		std::cerr << "Failed to load wall textures" << std::endl;
+		return -1;
 	}
 
-    drop_ppm_image("./out.ppm", framebuffer, win_w, win_h);
+	for (size_t frame=0; frame<360; frame++) {
+		std::stringstream ss;
+		ss << "out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
+		player.a += 2*M_PI/360;
+		
+		render(fb, map, player, tex_walls);
+		drop_ppm_image(ss.str(), fb.img, fb.w, fb.h);
+	}
 
     return 0;
 }

@@ -111,29 +111,12 @@ void render(FrameBuffer &fb, Map &map, Player &player, std::vector<Sprite> &spri
 	}
 }
 
+/*
+
 int main() {
-	FrameBuffer fb{1024, 512, std::vector<uint32_t>(1024*512, pack_color(255, 255, 255))};
-    Player player{3.456, 2.345, 1.523, M_PI/3.};
-    Map map;
-    Texture tex_walls("texturesfolder/walltext.png");
-	Texture tex_monst("texturesfolder/monsters.png");
-	if (!tex_walls.count || !tex_monst.count) {
-		std::cerr << "Failed to load textures" << std::endl;
-		return -1;
-	}
-	std::vector<Sprite> sprites{ {3.523, 3.812, 2, 0}, {1.834, 8.765, 0, 0}, {5.323, 5.365, 1, 0}, {4.123, 10.265, 1, 0} };
-
-	// for (size_t frame=0; frame<360; frame++) {
-	// 	std::stringstream ss;
-	// 	ss << "out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
-	// 	player.a += 2*M_PI/360;
-		
-	// 	render(fb, map, player, tex_walls);
-	// 	drop_ppm_image(ss.str(), fb.img, fb.w, fb.h);
-	// }
-
-	render(fb, map, player, sprites, tex_walls, tex_monst);
 	drop_ppm_image("./out.ppm", fb.img, fb.w, fb.h);
 
     return 0;
 }
+
+*/

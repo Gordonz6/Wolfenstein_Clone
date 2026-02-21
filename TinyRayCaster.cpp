@@ -101,13 +101,13 @@ void render(FrameBuffer &fb, Map &map, Player &player, std::vector<Sprite> &spri
 		} // ray marching loop
 	} // field of viecw ray sweeping
 
-	for (size_t i=0; i<sprites.size(); i++) { // update the distances from the player to each sprite
+	for (size_t i=0; i<sprites.size(); i++) { // calculate distance for all sprites
 		sprites[i].player_dist = std::sqrt(pow(player.x - sprites[i].x, 2) + pow(player.y - sprites[i].y, 2));
-		std::sort(sprites.begin(), sprites.end()); // sort it from furthest to closest
-		for (size_t i=0; i<sprites.size(); i++) { // draw the sprites
-			map_show_sprite(sprites[i], fb, map);
-			draw_sprite(sprites[i], depth_buffer, fb, player, tex_monst);
-		}
+	}
+	std::sort(sprites.begin(), sprites.end()); // sort it from furthest to closest
+	for (size_t i=0; i<sprites.size(); i++) { // draw the sprites
+		map_show_sprite(sprites[i], fb, map);
+		draw_sprite(sprites[i], depth_buffer, fb, player, tex_monst);
 	}
 }
 

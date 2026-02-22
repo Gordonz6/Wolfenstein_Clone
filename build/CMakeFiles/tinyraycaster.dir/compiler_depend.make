@@ -4094,6 +4094,7 @@ CMakeFiles/tinyraycaster.dir/tinyraycaster.cpp.o: /Users/gordonzheng/Desktop/Pro
   /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/player.h \
   /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/sprite.h \
   /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/textures.h \
+  /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/tinyraycaster.h \
   /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/utils.h
 
 CMakeFiles/tinyraycaster.dir/utils.cpp.o: /Users/gordonzheng/Desktop/Projects/Wolfenstein_clone/utils.cpp \
